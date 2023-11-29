@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -114,6 +115,11 @@ namespace CSP
                 return true;
             }
 
+            public bool IsUsed(int t)
+            {
+                return used[t] != -1;
+            }
+
             public bool CheckEndConstraints()
             {
                 foreach (var sub in Subjects)
@@ -132,6 +138,11 @@ namespace CSP
             public Subject subject;
             public Professor professor;
             public Group group;
+
+            public override string ToString()
+            {
+                return group.name + "-" + subject.name + "-" + professor.name;
+            }
         }
 
 
@@ -154,7 +165,7 @@ namespace CSP
                 schedule[t] = new List<Lesson>();
             }
 
-            if (Iterate(-1, -1, -1))
+            if (Iterate(-1, -1, -1, 0, 0))
             {
                 return schedule;
             }
@@ -162,25 +173,23 @@ namespace CSP
             return null;
         }
 
-        private bool Iterate(int t, int rInd, int rMax)
+        private bool Iterate(int t, int rInd, int rMax, int minG, int nextTimeStartG)
         {
-            if (t == HOURS_PER_WEEK) { return CheckEndConstraints(); }
+            if (t == HOURS_PER_WEEK) 
+            { 
+                return CheckEndConstraints(); 
+            }
 
             if (CheckEndConstraints())
             {
                 return true;
             }
 
-            if (rInd == 0)
-            {
-                schedule[t] = new List<Lesson>();
-            }
-
             if (rInd == rMax)
             {
-                for (int i = rooms; i >= 0; i--)
+                for (int i = rooms; i > 0; i--)
                 {
-                    if (Iterate(t + 1, 0, i))
+                    if (Iterate(t + 1, 0, i, nextTimeStartG, nextTimeStartG))
                     {
                         return true;
                     }
@@ -188,14 +197,15 @@ namespace CSP
                 return false;
             }
 
-            
-            foreach (Group group in groups)
+
+            for (int gInd = minG; gInd < groups.Count; gInd++)
             {
+                if (groups[gInd].IsUsed(t)) { continue; }
                 Lesson lesson;
-                lesson.group = group;
-                for (int subInd = 0; subInd < group.Subjects.Count; subInd++)
+                lesson.group = groups[gInd];
+                for (int subInd = 0; subInd < lesson.group.Subjects.Count; subInd++)
                 {
-                    lesson.subject = group.Subjects[subInd].Subject;
+                    lesson.subject = lesson.group.Subjects[subInd].Subject;
                     if (lesson.group.Set(t, subInd))
                     {
                         foreach (Professor professor in lesson.subject.Professors)
@@ -204,8 +214,15 @@ namespace CSP
                             if (lesson.professor.Set(t))
                             {
                                 schedule[t].Add(lesson);
-                                if (Iterate(t, rInd + 1, rMax)) { return true; }
+                                Log("Add: t=" + t.ToString() + " rInd=" + rInd.ToString() + " rMax=" + rMax.ToString() + " : " + lesson.ToString());
+                                int next = nextTimeStartG;
+                                if (rInd == 0)
+                                {
+                                    next = gInd;
+                                }
+                                if (Iterate(t, rInd + 1, rMax, gInd + 1, next)) { return true; }
                                 lesson.professor.Reset(t);
+                                Log("Remove: t=" + t.ToString() + " rInd=" + rInd.ToString() + " rMax=" + rMax.ToString() + " : " + schedule[t][rInd].ToString());
                                 schedule[t].RemoveAt(rInd);
                             }
                         }
@@ -228,6 +245,21 @@ namespace CSP
                 if (!professor.CheckEndConstraints()) return false;
             }
             return true;
+        }
+
+        private void Log(string message)
+        {
+            string dir = "results";
+            if (!Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+            string path = Path.Combine(dir, "log.txt");
+
+            using (StreamWriter outputFile = new StreamWriter(path, true))
+            {
+                outputFile.WriteLine(message);
+            }
         }
     }
 }
